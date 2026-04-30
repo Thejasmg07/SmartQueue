@@ -1,9 +1,11 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
-import UserPage from "./pages/UserPage";
+
 import QueuePage from "./pages/QueuePage";
-import AdminPage from "./pages/AdminPage";
+import AdminLogin from "./pages/AdminLogin";
+import AdminRegister from "./pages/AdminRegister";
+import AdminDashboard from "./pages/AdminDashboard";
 
 export default function App() {
   return (
@@ -13,9 +15,13 @@ export default function App() {
         <main className="max-w-6xl mx-auto">
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/user" element={<UserPage />} />
-            <Route path="/queue" element={<QueuePage />} />
-            <Route path="/admin" element={<AdminPage />} />
+            {/* The unified User Dashboard & Public Queue Page */}
+            <Route path="/queue/:serviceId" element={<QueuePage />} />
+            
+            {/* Admin routes for auth flow & dashboard */}
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/admin/register" element={<AdminRegister />} />
+            <Route path="/admin" element={<AdminDashboard />} />
           </Routes>
         </main>
       </div>
