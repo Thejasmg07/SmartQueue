@@ -30,9 +30,18 @@ const serviceSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    status: {
+      type: String,
+      enum: ["active", "paused", "closed"],
+      default: "active",
+    },
     maxTokensPerDay: {
       type: Number,
       default: 0, // 0 means unlimited
+    },
+    avgServiceTime: {
+      type: Number,
+      default: 5, // minutes per token
     },
   },
   { timestamps: true }

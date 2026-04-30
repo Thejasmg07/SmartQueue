@@ -1,5 +1,5 @@
 import express from "express";
-import { getServices, getServiceById, createService, pauseService, resumeService, updateServiceConfig } from "../controllers/serviceController.js";
+import { getServices, getServiceById, createService, pauseService, resumeService, updateServiceConfig, updateStatus } from "../controllers/serviceController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
@@ -13,6 +13,7 @@ router.route("/")
 router.put("/pause", protect, pauseService);
 router.put("/resume", protect, resumeService);
 router.put("/config", protect, updateServiceConfig);
+router.put("/status", protect, updateStatus);
 
 // Public: Single service lookup (wildcard, must be last)
 router.get("/:serviceId", getServiceById);

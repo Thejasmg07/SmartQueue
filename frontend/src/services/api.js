@@ -117,6 +117,11 @@ export const updateServiceConfig = async (config) => {
   return response.data;
 };
 
+export const updateServiceStatus = async (status) => {
+  const response = await api.put("/services/status", { status });
+  return response.data;
+};
+
 // Admin: Reset Queue
 export const resetQueue = async () => {
   const response = await api.delete("/tokens/reset");

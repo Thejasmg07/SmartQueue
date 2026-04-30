@@ -69,11 +69,11 @@ export const pauseService = async (req, res) => {
   try {
     const service = await Service.findOneAndUpdate(
       { adminId: req.admin._id },
-      { isPaused: true },
+      { isPaused: true, status: "paused" },
       { new: true }
     );
     if (!service) return res.status(404).json({ message: "Service not found" });
-    res.json({ message: "Queue has been paused.", isPaused: service.isPaused });
+    res.json({ message: "Queue has been paused.", isPaused: service.isPaused, status: service.status });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -84,11 +84,31 @@ export const resumeService = async (req, res) => {
   try {
     const service = await Service.findOneAndUpdate(
       { adminId: req.admin._id },
-      { isPaused: false },
+      { isPaused: false, status: "active" },
       { new: true }
     );
     if (!service) return res.status(404).json({ message: "Service not found" });
-    res.json({ message: "Queue has been resumed.", isPaused: service.isPaused });
+    res.json({ message: "Queue has been resumed.", isPaused: service.isPaused, status: service.status });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// PUT /api/services/status — Admin only (set active/paused/closed)
+export const updateStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!["active", "paused", "closed"].includes(status)) {
+      return res.status(400).json({ message: "Invalid status. Use: active, paused, closed" });
+    }
+    const isPaused = status !== "active";
+    const service = await Service.findOneAndUpdate(
+      { adminId: req.admin._id },
+      { status, isPaused },
+      { new: true }
+    );
+    if (!service) return res.status(404).json({ message: "Service not found" });
+    res.json({ success: true, status: service.status, isPaused: service.isPaused });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -97,13 +117,14 @@ export const resumeService = async (req, res) => {
 // PUT /api/services/config — Admin only
 export const updateServiceConfig = async (req, res) => {
   try {
-    const { maxTokensPerDay, name, type, location } = req.body;
+    const { maxTokensPerDay, name, type, location, avgServiceTime } = req.body;
 
     const updateFields = {};
     if (name !== undefined)            updateFields.name = name;
     if (type !== undefined)            updateFields.type = type;
     if (location !== undefined)        updateFields.location = location;
     if (maxTokensPerDay !== undefined) updateFields.maxTokensPerDay = Number(maxTokensPerDay) || 0;
+    if (avgServiceTime !== undefined)  updateFields.avgServiceTime = Number(avgServiceTime) || 5;
 
     const service = await Service.findOneAndUpdate(
       { adminId: req.admin._id },

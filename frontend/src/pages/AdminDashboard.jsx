@@ -12,6 +12,7 @@ import {
   resumeQueue,
   logoutAdmin,
   updateServiceConfig,
+  updateServiceStatus,
 } from "../services/api";
 
 export default function AdminDashboard() {
@@ -22,7 +23,7 @@ export default function AdminDashboard() {
   const [feedback, setFeedback] = useState({ type: "", msg: "" });
   const navigate = useNavigate();
 
-  const [configForm, setConfigForm] = useState({ name: "", type: "general", location: "", maxTokensPerDay: 0 });
+  const [configForm, setConfigForm] = useState({ name: "", type: "general", location: "", maxTokensPerDay: 0, avgServiceTime: 5 });
   const [formReady, setFormReady] = useState(false); // tracks whether form was pre-populated from API
 
   // ── Protected Route Logic ──
@@ -66,6 +67,7 @@ export default function AdminDashboard() {
         type: stats.service.type || "general",
         location: stats.service.location || "",
         maxTokensPerDay: stats.service.maxTokensPerDay ?? 0,
+        avgServiceTime: stats.service.avgServiceTime ?? 5,
       });
       setFormReady(true);
     }
@@ -74,6 +76,7 @@ export default function AdminDashboard() {
   const nowServing = tokens.find((t) => t.status === "called");
   const waitingCount = stats?.waiting || 0;
   const isPaused = stats?.service?.isPaused || false;
+  const serviceStatus = stats?.service?.status || "active";
 
   const showFeedback = (type, msg) => {
     setFeedback({ type, msg });
@@ -100,7 +103,21 @@ export default function AdminDashboard() {
   const handleSkip = () => handleAction(skipToken, "skip", "Token skipped.");
   const handleClearCompleted = () => handleAction(clearCompletedTokens, "clear", "Completed & skipped tokens cleared.", true);
   const handleReset = () => handleAction(resetQueue, "reset", "Entire queue reset.", true);
-  const handlePauseToggle = () => handleAction(isPaused ? resumeQueue : pauseQueue, "pause", isPaused ? "Queue Resumed." : "Queue Paused.");
+  
+  const handleStatusChange = async (newStatus) => {
+    if (newStatus === serviceStatus) return;
+    setLoadingAction("status");
+    try {
+      await updateServiceStatus(newStatus);
+      showFeedback("success", `Service is now ${newStatus.toUpperCase()}`);
+      loadData();
+    } catch (err) {
+      showFeedback("error", err.response?.data?.message || err.message);
+    } finally {
+      setLoadingAction("");
+    }
+  };
+
   const handleLogout = () => {
     logoutAdmin();
     navigate("/admin/login");
@@ -134,9 +151,16 @@ export default function AdminDashboard() {
     <div className="flex flex-col gap-8 animate-fade-in">
       {/* Top Header / Link */}
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-        <div>
-          <h2 className="text-2xl font-black text-slate-800">Queue Dashboard</h2>
-          <p className="text-slate-500 font-medium text-sm">Live management for {stats?.service?.name || "Queue"}</p>
+        <div className="flex items-center gap-3">
+          <div>
+            <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+              Queue Dashboard
+              {serviceStatus === "active" && <span className="bg-emerald-100 text-emerald-700 text-xs px-2.5 py-1 rounded-full uppercase tracking-widest">Active</span>}
+              {serviceStatus === "paused" && <span className="bg-amber-100 text-amber-700 text-xs px-2.5 py-1 rounded-full uppercase tracking-widest">Paused</span>}
+              {serviceStatus === "closed" && <span className="bg-rose-100 text-rose-700 text-xs px-2.5 py-1 rounded-full uppercase tracking-widest">Closed</span>}
+            </h2>
+            <p className="text-slate-500 font-medium text-sm">Live management for {stats?.service?.name || "Queue"}</p>
+          </div>
         </div>
         <button onClick={copyServiceLink} className="px-5 py-2.5 rounded-xl font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors shadow-sm active:scale-95 flex items-center gap-2">
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -150,10 +174,10 @@ export default function AdminDashboard() {
         {/* Left Column: Actions & Current Token */}
         <div className="flex flex-col gap-6">
           {/* Now Serving */}
-          <div className={`rounded-3xl p-10 text-center border-2 transition-colors duration-500 relative shadow-sm ${nowServing ? "bg-emerald-50 border-emerald-200" : isPaused ? "bg-amber-50 border-amber-200" : "bg-white border-slate-100"}`}>
-            {isPaused && (
-              <div className="absolute top-4 right-4 bg-amber-200 text-amber-800 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest shadow-sm">
-                PAUSED
+          <div className={`rounded-3xl p-10 text-center border-2 transition-colors duration-500 relative shadow-sm ${nowServing ? "bg-emerald-50 border-emerald-200" : serviceStatus === "paused" ? "bg-amber-50 border-amber-200" : serviceStatus === "closed" ? "bg-rose-50 border-rose-200" : "bg-white border-slate-100"}`}>
+            {serviceStatus !== "active" && (
+              <div className={`absolute top-4 right-4 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-widest shadow-sm ${serviceStatus === "paused" ? "bg-amber-200 text-amber-800" : "bg-rose-200 text-rose-800"}`}>
+                {serviceStatus}
               </div>
             )}
             <p className="text-sm font-bold uppercase tracking-widest text-slate-400 mb-3">Currently Serving</p>
@@ -168,7 +192,7 @@ export default function AdminDashboard() {
           <div className="grid grid-cols-2 gap-4">
             <button
               onClick={handleCallNext}
-              disabled={loadingAction !== "" || waitingCount === 0 || !!nowServing || isPaused}
+              disabled={loadingAction !== "" || waitingCount === 0 || !!nowServing || isPaused || serviceStatus === "closed"}
               className="py-5 rounded-2xl font-black text-white bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-md transition-all active:scale-95 text-lg"
             >
               {loadingAction === "call" ? "Calling…" : "CALL NEXT"}
@@ -191,13 +215,21 @@ export default function AdminDashboard() {
             >
               Skip Active
             </button>
-            <button
-              onClick={handlePauseToggle}
-              disabled={loadingAction !== ""}
-              className="py-3 rounded-xl font-bold text-amber-600 bg-white border border-amber-100 hover:bg-amber-50 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95 text-sm"
-            >
-              {isPaused ? "Resume Queue" : "Pause Queue"}
-            </button>
+            <div className="relative">
+              <select
+                value={serviceStatus}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                disabled={loadingAction !== ""}
+                className="w-full py-3 px-4 rounded-xl font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 shadow-sm outline-none disabled:opacity-50 appearance-none cursor-pointer text-sm text-center"
+              >
+                <option value="active">🟢 Active</option>
+                <option value="paused">🟡 Paused</option>
+                <option value="closed">🔴 Closed</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </div>
+            </div>
             <button
               onClick={handleClearCompleted}
               disabled={loadingAction !== "" || (stats?.completed === 0 && stats?.skipped === 0)}
@@ -280,6 +312,15 @@ export default function AdminDashboard() {
                 {stats.service.maxTokensPerDay > 0 ? stats.service.maxTokensPerDay : "Unlimited"}
               </p>
             </div>
+            <div className="bg-white rounded-xl p-3 shadow-sm col-span-2">
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wide">Status</p>
+              <p className="font-bold text-slate-800 mt-0.5 uppercase flex items-center gap-2">
+                {serviceStatus === "active" && <span className="w-2 h-2 rounded-full bg-emerald-500"></span>}
+                {serviceStatus === "paused" && <span className="w-2 h-2 rounded-full bg-amber-500"></span>}
+                {serviceStatus === "closed" && <span className="w-2 h-2 rounded-full bg-rose-500"></span>}
+                {serviceStatus}
+              </p>
+            </div>
           </div>
           <div className="bg-white rounded-xl p-3 shadow-sm mt-1">
             <p className="text-xs text-slate-400 font-bold uppercase tracking-wide mb-1">Service ID (Public Queue URL)</p>
@@ -335,6 +376,18 @@ export default function AdminDashboard() {
             placeholder="e.g. Main Street, Building 2, Counter 3"
             className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 outline-none transition-all"
           />
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-slate-600 mb-2">Avg. Service Time (Minutes)</label>
+          <input
+            type="number"
+            min="1"
+            value={configForm.avgServiceTime}
+            onChange={(e) => setConfigForm({...configForm, avgServiceTime: e.target.value})}
+            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-50 outline-none transition-all"
+          />
+          <p className="text-xs text-slate-400 mt-2">Used to calculate estimated wait times for users in the queue.</p>
         </div>
 
         <div>

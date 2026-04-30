@@ -142,8 +142,10 @@ export default function QueuePage() {
   }
 
   const nowServing = tokens.find(t => t.status === "called");
-  const isPaused = service?.isPaused;
+  const serviceStatus = service?.status || (service?.isPaused ? "paused" : "active");
   const isLimitReached = service?.maxTokensPerDay > 0 && 
+    (tokens.filter(t => new Date(t.createdAt).toDateString() === new Date().toDateString()).length >= service.maxTokensPerDay);
+  const avgServiceTime = service?.avgServiceTime || 5; 
     (tokens.filter(t => new Date(t.createdAt).toDateString() === new Date().toDateString()).length >= service.maxTokensPerDay);
 
   return (
@@ -151,9 +153,9 @@ export default function QueuePage() {
       
       {/* ── Header: Service Info ── */}
       <div className="bg-white rounded-3xl shadow-xl p-8 border border-slate-100 flex flex-col items-center text-center gap-3 relative overflow-hidden">
-        {isPaused && (
-           <div className="absolute top-0 left-0 w-full bg-amber-400 text-amber-900 text-xs font-black py-1 tracking-widest uppercase shadow-md">
-             Queue is Paused
+        {serviceStatus !== "active" && (
+           <div className={`absolute top-0 left-0 w-full text-xs font-black py-1.5 tracking-widest uppercase shadow-md ${serviceStatus === "paused" ? "bg-amber-400 text-amber-900" : "bg-rose-500 text-rose-50"}`}>
+             Queue is {serviceStatus}
            </div>
         )}
         <div className="w-16 h-16 rounded-2xl bg-indigo-50 flex items-center justify-center mt-2">
@@ -184,9 +186,15 @@ export default function QueuePage() {
                   <p className="text-slate-500 text-sm">Generate a digital token to secure your spot in line.</p>
                 </div>
 
-                {isPaused ? (
-                  <p className="text-amber-600 font-bold bg-amber-50 px-6 py-3 rounded-xl w-full border border-amber-200">
+                {serviceStatus === "paused" ? (
+                  <p className="text-amber-600 font-bold bg-amber-50 px-6 py-4 rounded-xl w-full border border-amber-200 shadow-sm flex flex-col gap-1 items-center justify-center">
+                    <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                     Queue is currently paused. Please wait.
+                  </p>
+                ) : serviceStatus === "closed" ? (
+                  <p className="text-rose-600 font-bold bg-rose-50 px-6 py-4 rounded-xl w-full border border-rose-200 shadow-sm flex flex-col gap-1 items-center justify-center">
+                    <svg className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Queue is closed for today.
                   </p>
                 ) : isLimitReached ? (
                   <p className="text-rose-600 font-bold bg-rose-50 px-6 py-3 rounded-xl w-full border border-rose-200">
@@ -226,7 +234,7 @@ export default function QueuePage() {
                     Your Token Number
                   </p>
                   
-                  <p className={`text-8xl font-black tracking-tighter drop-shadow-sm mb-4
+                  <p className={`text-6xl md:text-8xl font-black tracking-tighter drop-shadow-sm mb-4
                     ${myToken.status === "called" ? "text-emerald-600 animate-pulse" : 
                       myToken.status === "completed" ? "text-slate-400" : 
                       myToken.status === "skipped" ? "text-rose-400 line-through" :
@@ -237,9 +245,22 @@ export default function QueuePage() {
 
                   <div className="bg-white/60 rounded-xl py-3 px-4 backdrop-blur-sm shadow-sm inline-block">
                     {myToken.status === "waiting" && (
-                      <p className="text-indigo-800 font-bold">
-                        Position in Line: <span className="text-2xl ml-2">{queuePosition || "-"}</span>
-                      </p>
+                      <div className="flex flex-col gap-2">
+                        <p className="text-indigo-800 font-bold">
+                          Position in Line: <span className="text-2xl ml-2">{queuePosition || "-"}</span>
+                        </p>
+                        {queuePosition > 1 && (
+                          <div className="bg-indigo-100/50 rounded-lg p-2 text-sm text-indigo-700 font-medium">
+                            <span className="opacity-75 mr-1">Estimated Wait:</span>
+                            <strong>~{(queuePosition - 1) * avgServiceTime} mins</strong>
+                          </div>
+                        )}
+                        {queuePosition === 1 && (
+                          <p className="text-sm font-bold text-emerald-600 mt-1 animate-pulse">
+                            You are next! Get ready.
+                          </p>
+                        )}
+                      </div>
                     )}
                     {myToken.status === "called" && (
                       <p className="text-emerald-700 font-bold text-lg animate-bounce">
@@ -270,7 +291,7 @@ export default function QueuePage() {
 
         {/* ── Right Column: Now Serving Display ── */}
         <div className="flex flex-col gap-6">
-          <div className="bg-slate-800 rounded-3xl shadow-2xl p-8 border border-slate-700 h-full flex flex-col justify-center items-center text-center relative overflow-hidden">
+          <div className="bg-slate-800 rounded-3xl shadow-2xl p-8 border border-slate-700 h-full flex flex-col justify-center items-center text-center relative overflow-hidden min-h-[300px]">
             {/* Subtle background glow */}
             <div className={`absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full blur-3xl pointer-events-none transition-colors duration-1000 ${nowServing ? 'bg-emerald-500/20' : 'bg-slate-600/10'}`}></div>
 
@@ -280,7 +301,7 @@ export default function QueuePage() {
             
             {nowServing ? (
               <div className="z-10 animate-fade-in">
-                <p className="text-8xl md:text-9xl font-black text-emerald-400 tracking-tighter drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">
+                <p className="text-7xl md:text-9xl font-black text-emerald-400 tracking-tighter drop-shadow-[0_0_15px_rgba(52,211,153,0.5)]">
                   {nowServing.tokenId}
                 </p>
                 <p className="text-emerald-500/80 font-bold tracking-widest uppercase mt-6 animate-pulse">

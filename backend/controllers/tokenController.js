@@ -17,7 +17,10 @@ export const createToken = async (req, res) => {
       return res.status(404).json({ message: "Service not found" });
     }
 
-    if (service.isPaused) {
+    if (service.status === "closed") {
+      return res.status(403).json({ message: "Queue is closed for today." });
+    }
+    if (service.status === "paused" || service.isPaused) {
       return res.status(403).json({ message: "Queue is currently paused." });
     }
 
@@ -78,7 +81,15 @@ export const getQueue = async (req, res) => {
     const service = await Service.findOne({ serviceId });
     if (!service) return res.status(404).json({ message: "Service not found" });
 
-    const tokens = await Token.find({ serviceId: service._id }).sort({ createdAt: 1 });
+    // Logical Daily Reset: Only fetch tokens created today
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const tokens = await Token.find({ 
+      serviceId: service._id,
+      createdAt: { $gte: startOfDay }
+    }).sort({ createdAt: 1 });
+    
     res.json(tokens);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -162,18 +173,16 @@ export const getStats = async (req, res) => {
     const serviceId = req.serviceId;
     const service = await Service.findById(serviceId);
 
-    const total = await Token.countDocuments({ serviceId });
-    const waiting = await Token.countDocuments({ serviceId, status: "waiting" });
-    const completed = await Token.countDocuments({ serviceId, status: "completed" });
-    const skipped = await Token.countDocuments({ serviceId, status: "skipped" });
-
-    // Calculate current token count for today
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-    const todayCount = await Token.countDocuments({
-      serviceId,
-      createdAt: { $gte: startOfDay }
-    });
+
+    const baseQuery = { serviceId, createdAt: { $gte: startOfDay } };
+
+    const total = await Token.countDocuments(baseQuery);
+    const waiting = await Token.countDocuments({ ...baseQuery, status: "waiting" });
+    const completed = await Token.countDocuments({ ...baseQuery, status: "completed" });
+    const skipped = await Token.countDocuments({ ...baseQuery, status: "skipped" });
+    const todayCount = total; // todayCount is now the same as total
 
     res.json({
       total,
@@ -187,7 +196,9 @@ export const getStats = async (req, res) => {
         type: service.type || "general",
         location: service.location || "",
         isPaused: service.isPaused,
+        status: service.status || "active",
         maxTokensPerDay: service.maxTokensPerDay || 0,
+        avgServiceTime: service.avgServiceTime || 5,
       }
     });
   } catch (error) {
